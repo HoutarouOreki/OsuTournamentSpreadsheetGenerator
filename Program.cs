@@ -344,10 +344,10 @@ okguysweneedaname
                 ws.Cells["M1"].Value = "Picks";
                 ws.Cells["N1"].Value = matches.Count(m => m.Games.Any(g => g.BeatmapId == map.Id));
                 ws.Cells["M2"].Value = "Average score";
-                ws.Cells["N2"].Formula = $"=AVERAGE(F7:F500)";
+                ws.Cells["N2"].Formula = $"AVERAGE(F7:F500)";
                 ws.Cells["N2"].Style.Numberformat.Format = "#";
                 ws.Cells["M3"].Value = "Median score";
-                ws.Cells["N3"].Formula = $"=MEDIAN(F7:F500)";
+                ws.Cells["N3"].Formula = $"MEDIAN(F7:F500)";
                 ws.Cells["N3"].Style.Numberformat.Format = "#";
 
                 var lastScore = int.MinValue;
