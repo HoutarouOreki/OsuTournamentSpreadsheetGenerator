@@ -29,9 +29,9 @@ namespace TournamentUtilities
             var participantsIdsFilePath = $"{storage}/participants.txt";
             var mapIdsFilePath = $"{storage}/mappool.txt";
 
-            api_key = File.ReadAllText(apiKeyFilePath);
+            try { api_key = File.ReadAllText(apiKeyFilePath); } catch { }
 
-            if (api_key.Length < 10)
+            if (string.IsNullOrEmpty(api_key) || api_key.Length < 10)
             {
                 Console.WriteLine(apiKeyFilePath + " should contain your api key");
                 Seperator();
@@ -73,6 +73,7 @@ okguysweneedaname
                 Console.ReadKey(true);
                 Directory.CreateDirectory(storage);
                 Process.Start("explorer.exe", storage);
+                return;
             }
 
             var roomIds = new List<int>();
