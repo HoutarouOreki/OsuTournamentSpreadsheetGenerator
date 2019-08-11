@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 
 namespace TournamentUtilities
@@ -10,5 +11,48 @@ namespace TournamentUtilities
 
         [JsonProperty("scores")]
         public IEnumerable<BanchoScoreAPI> Scores;
+
+        [JsonProperty("mods")]
+        public Mods? GlobalMods;
+    }
+
+    [Flags]
+    public enum Mods
+    {
+        None = 0,
+        NF = 1,
+        EZ = 2,
+        TouchDevice = 4,
+        HD = 8,
+        HR = 16,
+        SuddenDeath = 32,
+        DT = 64,
+        Relax = 128,
+        HalfTime = 256,
+        Nightcore = 512, // Only set along with DoubleTime. i.e: NC only gives 576
+        Flashlight = 1024,
+        Autoplay = 2048,
+        SpunOut = 4096,
+        Relax2 = 8192,    // Autopilot
+        Perfect = 16384, // Only set along with SuddenDeath. i.e: PF only gives 16416  
+        Key4 = 32768,
+        Key5 = 65536,
+        Key6 = 131072,
+        Key7 = 262144,
+        Key8 = 524288,
+        FadeIn = 1048576,
+        Random = 2097152,
+        Cinema = 4194304,
+        Target = 8388608,
+        Key9 = 16777216,
+        KeyCoop = 33554432,
+        Key1 = 67108864,
+        Key3 = 134217728,
+        Key2 = 268435456,
+        ScoreV2 = 536870912,
+        LastMod = 1073741824,
+        KeyMod = Key1 | Key2 | Key3 | Key4 | Key5 | Key6 | Key7 | Key8 | Key9 | KeyCoop,
+        FreeModAllowed = NF | EZ | HD | HR | SuddenDeath | Flashlight | FadeIn | Relax | Relax2 | SpunOut | KeyMod,
+        ScoreIncreaseMods = HD | HR | DT | Flashlight | FadeIn
     }
 }
