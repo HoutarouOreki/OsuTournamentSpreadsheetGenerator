@@ -330,16 +330,29 @@ okguysweneedaname
                 ws.Column(10).Width = 9;
                 ws.Column(11).Width = 9;
                 ws.Column(12).Width = 9;
+                ws.Column(13).Width = 15;
+                ws.Column(14).Width = 12.5;
                 ws.Row(6).Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thick;
                 ws.Row(6).Style.Border.Bottom.Color.SetColor(Color.Gray);
 
-                ws.Cells["A1:A500,A6:I6,K1:K4,I1:I4,F1:F4"].Style.Font.Bold = true;
-                ws.Cells["A1:L500"].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
-                ws.Cells["A1:L500"].Style.VerticalAlignment = OfficeOpenXml.Style.ExcelVerticalAlignment.Center;
+                ws.Cells["A1:A500,A6:I6,K1:K4,I1:I4,F1:F4,M1:M4"].Style.Font.Bold = true;
+                ws.Cells["A1:N500"].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
+                ws.Cells["A1:N500"].Style.VerticalAlignment = OfficeOpenXml.Style.ExcelVerticalAlignment.Center;
+
+                var scores = matches.SelectMany(m => m.Games).Where(g => g.BeatmapId == map.Id).SelectMany(g => g.Scores).Where(s => players.Any(player => player.Id == s.PlayerId)).OrderByDescending(s => s.Score).ToList();
+
+                ws.Cells["M1"].Value = "Picks";
+                ws.Cells["N1"].Value = matches.Count(m => m.Games.Any(g => g.BeatmapId == map.Id));
+                ws.Cells["M2"].Value = "Average score";
+                ws.Cells["N2"].Formula = $"=AVERAGE(F7:F500)";
+                ws.Cells["N2"].Style.Numberformat.Format = "#";
+                ws.Cells["M3"].Value = "Median score";
+                ws.Cells["N3"].Formula = $"=MEDIAN(F7:F500)";
+                ws.Cells["N3"].Style.Numberformat.Format = "#";
 
                 var lastScore = int.MinValue;
                 var currentRow = 6;
-                foreach (var score in matches.SelectMany(m => m.Games).Where(g => g.BeatmapId == map.Id).SelectMany(g => g.Scores).Where(s => players.Any(player => player.Id == s.PlayerId)).OrderByDescending(s => s.Score))
+                foreach (var score in scores)
                 {
                     currentRow++;
                     ws.Cells[currentRow, 1].Value = score.Score == lastScore ? ws.Cells[currentRow - 1, 1].Value : currentRow - 6;
@@ -353,7 +366,10 @@ okguysweneedaname
                     ws.Cells[currentRow, 7].Value = score.Combo;
                     ws.Cells[currentRow, 8].Value = score.Accuracy;
                     var game = matches.SelectMany(m => m.Games).Single(g => g.Scores.Contains(score));
+                    var match = matches.Find(m => m.Games.Contains(game));
                     ws.Cells[currentRow, 9].Value = ((Mods)((int)(game.GlobalMods ?? Mods.None) + (int)(score.Mods ?? Mods.None))).ToString().Replace("None", "");
+                    ws.Cells[currentRow, 10].Hyperlink = new Uri($@"https://osu.ppy.sh/community/matches/{match.MatchInfo.Id}");
+                    ws.Cells[currentRow, 10].Value = "match";
                 }
 
                 ws.Cells["B7:B500"].Style.Font.Size = 10;
