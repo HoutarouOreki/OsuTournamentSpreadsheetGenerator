@@ -218,7 +218,7 @@ okguysweneedaname
 
             var mapsDeserialized = JsonConvert.DeserializeObject<OsuMap[]>(response.Content);
             if (mapsDeserialized.Length == 0)
-                return new OsuMap { Title = "Deleted map" };
+                return new OsuMap { Id = mapId, Title = "Deleted map" };
 
             return mapsDeserialized[0];
         }
