@@ -214,9 +214,13 @@ okguysweneedaname
             request.AddParameter("b", mapId);
 
             var response = await client.ExecuteGetTaskAsync(request);
-            Console.WriteLine($"Received map {mapId} response: {response.Content.Substring(0, 40)}");
+            Console.WriteLine($"Received map {mapId} response: {response.Content.Substring(0, Math.Min(40, response.Content.Length))}");
 
-            return JsonConvert.DeserializeObject<OsuMap[]>(response.Content)[0];
+            var mapsDeserialized = JsonConvert.DeserializeObject<OsuMap[]>(response.Content);
+            if (mapsDeserialized.Length == 0)
+                return new OsuMap { Title = "Deleted map" };
+
+            return mapsDeserialized[0];
         }
 
         private static void CompileMapStatistics(List<int> roomIds, List<int> participantIds, List<int> mapIds, List<Team> teams)
@@ -234,7 +238,9 @@ okguysweneedaname
 
             Console.WriteLine("Downloading players, matches and maps");
 
-            Task.WaitAll(playerDownloadTasks.Concat<Task>(matchDownloadTasks).Concat(mapDownloadTasks).ToArray());
+            Task.WaitAll(playerDownloadTasks.ToArray());
+            Task.WaitAll(matchDownloadTasks.ToArray());
+            Task.WaitAll(mapDownloadTasks.ToArray());
 
             Console.WriteLine("Players, matches and maps downloaded");
 
@@ -249,7 +255,7 @@ okguysweneedaname
         {
             Console.WriteLine("Compiling spreadsheet");
 
-            var p = new ExcelPackage();
+            using var p = new ExcelPackage();
             var spreadsheetFilePath = new FileInfo($"{storage}/mappoolStatistics.xlsx");
 
             foreach (var map in maps)
