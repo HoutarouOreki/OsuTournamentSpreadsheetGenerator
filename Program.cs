@@ -19,109 +19,68 @@ namespace TournamentUtilities
         private static readonly string storage = $@"{Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)}\osuTournamentUtilities";
         private static string api_key;
         private static readonly RestClient client = new RestClient("https://osu.ppy.sh/api");
+        private static readonly Regex number_regex = new Regex(@"^(\d+)$");
+        private static readonly Regex loose_number_regex = new Regex(@"(\d+)$");
 
-        private static void Seperator() => Console.WriteLine("\n######\n######\n");
+        private static IEnumerable<string> GetLines(string pasteWhat)
+        {
+            var list = new List<string>();
+            Console.WriteLine($"Paste {pasteWhat}. One per line. When finished, type in \"ok\" and press enter.");
+            var inputLine = "";
+            while (inputLine != "ok")
+            {
+                Console.Write(">");
+                inputLine = Console.ReadLine();
+                if (string.IsNullOrEmpty(inputLine))
+                    Console.WriteLine("Empty line entered, ignoring...");
+                else if (inputLine != "ok")
+                    list.Add(inputLine);
+            }
+            return list;
+        }
+
+        private static IEnumerable<int> GetNumbers(string pasteWhat, bool looseRegex = false)
+        {
+            var list = new List<int>();
+            foreach (var numberString in GetLines($"{pasteWhat}{(looseRegex ? ". You can also paste a link, but make sure the number is at the end of the line" : "")}"))
+            {
+                var idMatch = looseRegex ? loose_number_regex.Match(numberString) : number_regex.Match(numberString);
+                if (!idMatch.Success)
+                    Console.WriteLine($"Could not parse number from \"{numberString}\", ignoring...");
+                else
+                    list.Add(int.Parse(idMatch.Groups[1].Value));
+            }
+            return list;
+        }
 
         public static void Main()
         {
-            var apiKeyFilePath = $"{storage}/apiKey.txt";
-            var roomIdsFilePath = $"{storage}/roomIds.txt";
-            var participantsIdsFilePath = $"{storage}/participants.txt";
-            var mapIdsFilePath = $"{storage}/mappool.txt";
-
-            try { api_key = File.ReadAllText(apiKeyFilePath); } catch { }
-
-            if (string.IsNullOrEmpty(api_key) || api_key.Length < 10)
-            {
-                Console.WriteLine(apiKeyFilePath + " should contain your api key");
-                Seperator();
-
-                Console.WriteLine(roomIdsFilePath + " should contain all multiplayer room IDs that will be checked, for example:");
-                Console.WriteLine(@"
-https://osu.ppy.sh/community/matches/53801400
-Blue Team forfeits
-53802247
-https://osu.ppy.sh/community/matches/53804224");
-                Console.WriteLine();
-                Console.WriteLine("Any single string of digits on a line will be considered as a match ID");
-                Seperator();
-
-                Console.WriteLine(mapIdsFilePath + " should contain all map IDs. Same rules apply as for match IDs");
-                Seperator();
-
-                Console.WriteLine(participantsIdsFilePath + " should contain all participants' IDs and team names in this format:");
-                Console.WriteLine(@"進撃のバブルティー
-3068044
-3345902
-832084
-3478883
-
-reyuza ganteng
-4750008
-2454767
-1987591
-2312106
-
-okguysweneedaname
-5447609
-3517706
-6437601
-195946");
-                Seperator();
-
-                Console.WriteLine("Press any key to open the folder");
-                Console.ReadKey(true);
+            if (!Directory.Exists(storage))
                 Directory.CreateDirectory(storage);
-                Process.Start("explorer.exe", storage);
-                return;
-            }
-
-            var roomIds = new List<int>();
-            var participantIds = new List<int>();
-            var mapIds = new List<int>();
-
-            var teams = new List<Team>();
-
-            foreach (var roomId in File.ReadAllLines(roomIdsFilePath))
+            Console.WriteLine("This program generates a spreadsheet with players' scores" +
+                " on maps. You'll have to provide:");
+            Console.WriteLine("- your osu!api key (from https://osu.ppy.sh/p/api/)");
+            Console.WriteLine("- players' IDs (or links to their profiles)");
+            Console.WriteLine("- match IDs (or mp lobby links)");
+            Console.WriteLine("- map IDs");
+            while (string.IsNullOrEmpty(api_key) || api_key.Length < 8)
             {
-                var match = Regex.Match(roomId, @"(\d+)");
-                if (match.Success)
-                    roomIds.Add(int.Parse(match.Groups[1].Value));
+                Console.WriteLine("Paste your api key:");
+                Console.Write(">");
+                api_key = Console.ReadLine();
             }
 
-            var currentTeam = (Team)null;
+            var roomIds = GetNumbers("room IDs", true);
+            var participantIds = GetNumbers("player IDs", true);
+            var mapIds = GetNumbers("map IDs");
 
-            foreach (var line in File.ReadAllLines(participantsIdsFilePath))
-            {
-                var userIdMatch = Regex.Match(line, @"^(\d+)$");
-                if (userIdMatch.Success)
-                {
-                    var id = int.Parse(userIdMatch.Groups[1].Value);
-                    currentTeam.Members.Add(id);
-                    participantIds.Add(id);
-                }
-                else if (!string.IsNullOrWhiteSpace(line))
-                    teams.Add(currentTeam = new Team { Name = line });
-            }
-
-            foreach (var map in File.ReadAllLines(mapIdsFilePath))
-            {
-                var match = Regex.Match(map, @"(\d+)");
-                if (match.Success)
-                    mapIds.Add(int.Parse(match.Groups[1].Value));
-            }
-
-            Console.WriteLine("press 1: Average scores");
-            Console.WriteLine("press anything else: Mappool statistics");
-            var selection = Console.ReadKey(true);
-            Console.WriteLine($"You selected option {selection.KeyChar}");
-            if (selection.KeyChar == '1')
-                CompileMapScores(roomIds, participantIds);
-            else
-                CompileMapStatistics(roomIds, participantIds, mapIds, teams);
+            Console.WriteLine("Upon pressing anything all the needed data will begin to download.");
+            Console.ReadKey(true);
+            Console.WriteLine("Beginning data download.");
+            CompileMapStatistics(roomIds, participantIds, mapIds);
         }
 
-        private static void CompileMapScores(List<int> roomIds, List<int> participantIds)
+        public static void CompileMapScores(IEnumerable<int> roomIds, IEnumerable<int> participantIds)
         {
             var s = new StringBuilder();
             var mapScores = MapScores(roomIds, participantIds);
@@ -182,7 +141,8 @@ okguysweneedaname
             request.AddParameter("mp", matchId);
 
             var response = await client.ExecuteGetTaskAsync(request);
-            Console.WriteLine($"Received match {matchId} response: {response.Content.Substring(0, 40)}");
+            var previewString = response.Content.Length > 42 ? response.Content.Substring(0, 40) : response.Content;
+            Console.WriteLine($"Received match {matchId} response: {previewString}");
 
             return JsonConvert.DeserializeObject<BanchoMatchAPI>(response.Content);
         }
@@ -223,7 +183,7 @@ okguysweneedaname
             return mapsDeserialized[0];
         }
 
-        private static void CompileMapStatistics(List<int> roomIds, List<int> participantIds, List<int> mapIds, List<Team> teams)
+        private static void CompileMapStatistics(IEnumerable<int> roomIds, IEnumerable<int> participantIds, IEnumerable<int> mapIds)
         {
             var players = new List<OsuPlayer>();
             var matches = new List<BanchoMatchAPI>();
@@ -248,15 +208,58 @@ okguysweneedaname
             matches.AddRange(matchDownloadTasks.Select(mt => mt.Result));
             maps.AddRange(mapDownloadTasks.Select(mt => mt.Result));
 
-            CreateMappoolStatisticsSpreadsheet(players, matches, maps, teams);
+            CreateMappoolStatisticsSpreadsheet(players, matches, maps);
         }
 
-        private static void CreateMappoolStatisticsSpreadsheet(List<OsuPlayer> players, List<BanchoMatchAPI> matches, List<OsuMap> maps, List<Team> teams)
+        private static void CreateMappoolStatisticsSpreadsheet(List<OsuPlayer> players, List<BanchoMatchAPI> matches, List<OsuMap> maps)
         {
             Console.WriteLine("Compiling spreadsheet");
 
             using var p = new ExcelPackage();
             var spreadsheetFilePath = new FileInfo($"{storage}/mappoolStatistics.xlsx");
+
+            { // the player summary spreadsheet
+                var ws = p.Workbook.Worksheets.Add("Players summary");
+
+                var placeNumberCell = ws.Cells["A1"];
+                placeNumberCell.Value = "#";
+
+                var playerNameCell = ws.Cells["B1"];
+                playerNameCell.Value = "Player name";
+
+                var totalScoreCell = ws.Cells["C1"];
+                totalScoreCell.Value = "Total score";
+
+                var mapColumn = 4;
+                foreach (var map in maps)
+                {
+                    var mapTitleCell = ws.Cells[1, mapColumn++];
+                    mapTitleCell.Value = map.Title;
+                }
+
+                var currentRow = 1;
+                var playerPlace = 1;
+                foreach (var player in players.OrderByDescending(p => matches.SelectMany(m => m.Games.SelectMany(g => g.Scores).Where(s => s.PlayerId == p.Id)).Sum(score => score.Score)))
+                {
+                    currentRow++;
+                    ws.Cells[currentRow, 1].Value = playerPlace++;
+
+                    ws.Cells[currentRow, 2].Value = player.Username;
+
+                    ws.Cells[currentRow, 3].Value = matches.SelectMany(m => m.Games.SelectMany(g => g.Scores).Where(s => s.PlayerId == player.Id)).Sum(score => score.Score);
+
+                    var currentColumn = 3;
+                    foreach (var map in maps)
+                    {
+                        currentColumn++;
+                        var scores = matches.SelectMany(m => m.Games.Where(g => g.BeatmapId == map.Id).SelectMany(g => g.Scores).Where(score => score.PlayerId == player.Id)).Select(s => s.Score);
+                        if (scores.Count() == 1)
+                            ws.Cells[currentRow, currentColumn].Value = scores.First();
+                        else
+                            ws.Cells[currentRow, currentColumn].Value = string.Join(", ", scores);
+                    }
+                }
+            }
 
             foreach (var map in maps)
             {
@@ -317,21 +320,20 @@ okguysweneedaname
 
                 ws.Cells["A6"].Value = "Pos";
                 ws.Column(1).Width = 4;
-                ws.Cells["B6"].Value = "Team";
-                ws.Column(2).Width = 19;
-                ws.Cells["C6"].Value = "Cn.";
-                ws.Column(3).Width = 4;
-                ws.Cells["D6"].Value = "Player";
-                ws.Column(4).Width = 18;
-                ws.Cells["E6"].Value = "Rank";
-                ws.Column(5).Width = 5.2;
-                ws.Cells["F6"].Value = "Score";
-                ws.Column(6).Width = 9;
-                ws.Cells["G6"].Value = "Combo";
+                ws.Cells["B6"].Value = "Cn.";
+                ws.Column(2).Width = 4;
+                ws.Cells["C6"].Value = "Player";
+                ws.Column(3).Width = 18;
+                ws.Cells["D6"].Value = "Rank";
+                ws.Column(4).Width = 5.2;
+                ws.Cells["E6"].Value = "Score";
+                ws.Column(5).Width = 9;
+                ws.Cells["F6"].Value = "Combo";
+                ws.Column(6).Width = 14;
+                ws.Cells["G6"].Value = "Accuracy";
                 ws.Column(7).Width = 14;
-                ws.Cells["H6"].Value = "Accuracy";
-                ws.Column(8).Width = 14;
-                ws.Cells["I6"].Value = "Mods";
+                ws.Cells["H6"].Value = "Mods";
+                ws.Column(8).Width = 9;
                 ws.Column(9).Width = 9;
                 ws.Column(10).Width = 9;
                 ws.Column(11).Width = 9;
@@ -350,10 +352,10 @@ okguysweneedaname
                 ws.Cells["M1"].Value = "Picks";
                 ws.Cells["N1"].Value = matches.Count(m => m.Games.Any(g => g.BeatmapId == map.Id));
                 ws.Cells["M2"].Value = "Average score";
-                ws.Cells["N2"].Formula = $"AVERAGE(F7:F500)";
+                ws.Cells["N2"].Formula = $"AVERAGE(E7:E500)";
                 ws.Cells["N2"].Style.Numberformat.Format = "#";
                 ws.Cells["M3"].Value = "Median score";
-                ws.Cells["N3"].Formula = $"MEDIAN(F7:F500)";
+                ws.Cells["N3"].Formula = $"MEDIAN(E7:E500)";
                 ws.Cells["N3"].Style.Numberformat.Format = "#";
 
                 var lastScore = int.MinValue;
@@ -361,21 +363,22 @@ okguysweneedaname
                 foreach (var score in scores)
                 {
                     currentRow++;
-                    ws.Cells[currentRow, 1].Value = score.Score == lastScore ? ws.Cells[currentRow - 1, 1].Value : currentRow - 6;
+                    var currentColumn = 1;
+                    ws.Cells[currentRow, currentColumn++].Value = score.Score == lastScore ? ws.Cells[currentRow - 1, 1].Value : currentRow - 6;
                     lastScore = score.Score;
-                    ws.Cells[currentRow, 2].Value = teams.Find(t => t.Members.Contains(score.PlayerId)).Name;
                     var player = players.Find(_p => _p.Id == score.PlayerId);
-                    ws.Cells[currentRow, 3].Value = player.Country;
-                    ws.Cells[currentRow, 4].Value = player.Username;
-                    ws.Cells[currentRow, 5].Value = score.Grade;
-                    ws.Cells[currentRow, 6].Value = score.Score;
-                    ws.Cells[currentRow, 7].Value = score.Combo;
-                    ws.Cells[currentRow, 8].Value = score.Accuracy;
+                    ws.Cells[currentRow, currentColumn++].Value = player.Country;
+                    ws.Cells[currentRow, currentColumn++].Value = player.Username;
+                    ws.Cells[currentRow, currentColumn++].Value = score.Grade;
+                    ws.Cells[currentRow, currentColumn++].Value = score.Score;
+                    ws.Cells[currentRow, currentColumn++].Value = score.Combo;
+                    ws.Cells[currentRow, currentColumn].Style.Numberformat.Format = "0.00%";
+                    ws.Cells[currentRow, currentColumn++].Value = score.Accuracy;
                     var game = matches.SelectMany(m => m.Games).Single(g => g.Scores.Contains(score));
                     var match = matches.Find(m => m.Games.Contains(game));
-                    ws.Cells[currentRow, 9].Value = ((Mods)((int)(game.GlobalMods ?? Mods.None) + (int)(score.Mods ?? Mods.None))).ToString().Replace("None", "");
-                    ws.Cells[currentRow, 10].Hyperlink = new Uri($@"https://osu.ppy.sh/community/matches/{match.MatchInfo.Id}");
-                    ws.Cells[currentRow, 10].Value = "match";
+                    ws.Cells[currentRow, currentColumn++].Value = ((Mods)((int)(game.GlobalMods ?? Mods.None) + (int)(score.Mods ?? Mods.None))).ToString().Replace("None", "");
+                    ws.Cells[currentRow, currentColumn].Hyperlink = new Uri($@"https://osu.ppy.sh/community/matches/{match.MatchInfo.Id}");
+                    ws.Cells[currentRow, currentColumn].Value = "match link";
                 }
 
                 ws.Cells["B7:B500"].Style.Font.Size = 10;
@@ -416,7 +419,13 @@ okguysweneedaname
                 try
                 {
                     p.SaveAs(spreadsheetFilePath);
+                    Console.WriteLine("\n------------------------------------------------\n");
                     Console.WriteLine($"Successfully written a spreadsheet to {spreadsheetFilePath}");
+                    Console.WriteLine("You can import the file to Google Sheets by going to docs.google.com,");
+                    Console.WriteLine("clicking the folder icon on the right side, \"Upload\" tab,");
+                    Console.WriteLine("and selecting the spreadsheet.");
+                    Console.WriteLine("Press any key to open the spreadsheet's folder and close this program.");
+                    Console.ReadKey(true);
                     Console.WriteLine("Opening folder in 3 seconds");
                     Thread.Sleep(3000);
                     Process.Start("explorer.exe", $@"/select, ""{spreadsheetFilePath.FullName}""");
